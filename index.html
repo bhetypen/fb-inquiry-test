@@ -1,291 +1,137 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Inquiry Form → Admin → Reply to Facebook (Auto-write)</title>
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 28px; line-height: 1.45; }
-    .wrap { max-width: 980px; margin: 0 auto; }
-    .topbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom: 16px; }
-    .pill { padding: 6px 10px; border:1px solid #ddd; border-radius:999px; background:#fafafa; font-size: 13px; }
-    .grid { display:grid; grid-template-columns: 1fr; gap: 16px; }
-    @media (min-width: 900px){ .grid { grid-template-columns: 1fr 1fr; } }
-    .card { border: 1px solid #ddd; border-radius: 16px; padding: 16px; }
-    h1 { margin: 0 0 8px; font-size: 22px; }
-    label { display:block; font-weight: 600; margin: 10px 0 6px; }
-    input, textarea {
-      width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 12px; font-size: 15px;
-    }
-    textarea { min-height: 110px; resize: vertical; }
-    .row { display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
-    button, a.btn {
-      display:inline-block; padding: 10px 12px; border-radius: 12px;
-      border: 1px solid #ccc; background: #fff; cursor: pointer;
-      text-decoration:none; color:#111; font-weight: 650;
-    }
-    button.primary, a.btn.primary { border-color:#111; }
-    .muted { color:#555; font-size: 13px; }
-    .list { display:flex; flex-direction:column; gap: 10px; margin-top: 10px; }
-    .item { border: 1px solid #eee; border-radius: 14px; padding: 12px; background: #fafafa; }
-    .item strong { display:block; margin-bottom: 4px; }
-    code { word-break: break-all; }
-    .empty { padding: 12px; border: 1px dashed #ccc; border-radius: 14px; color:#555; }
-    .warn { padding: 10px 12px; border-radius: 12px; background:#fff6e5; border: 1px solid #f3d19c; color:#6b4b00; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Multi-Channel Inquiry Dashboard</title>
+
+<style>
+body { font-family: system-ui, Arial, sans-serif; margin: 24px; }
+.card { border:1px solid #ddd; border-radius:14px; padding:16px; margin-bottom:16px; }
+button { padding:10px 14px; border-radius:10px; border:1px solid #333; cursor:pointer; }
+.row { display:flex; gap:10px; flex-wrap:wrap; }
+.muted { color:#555; font-size:13px; }
+</style>
 </head>
+
 <body>
-  <div class="wrap">
-    <div class="topbar">
-      <span class="pill"><strong>Mode:</strong> <span id="modeLabel">Form</span></span>
-      <span class="pill"><strong>URL:</strong> <code id="thisUrl"></code></span>
-      <a class="btn" href="?mode=form">Open Form</a>
-      <a class="btn" href="?mode=admin">Open Admin Inbox</a>
-      <button class="btn" id="clear" type="button">Clear Test Inquiries</button>
-    </div>
 
-    <div class="warn">
-      <strong>Note:</strong> This demo stores inquiries in <code>localStorage</code> (same device/browser only).
-      The “Reply” button opens Facebook Messenger with the enquiry auto-written (you still press Send).
-    </div>
+<h2>Inquiry System</h2>
 
-    <div class="grid" style="margin-top:16px;">
-      <!-- FORM -->
-      <section class="card" id="formCard" style="display:none;">
-        <h1>Inquiry Form (User side)</h1>
-        <p class="muted">
-          Submit an enquiry, then open <strong>Admin Inbox</strong> and click <strong>Reply</strong> to open Facebook Messenger
-          with the original enquiry auto-written.
-        </p>
+<div class="row">
+  <a href="?mode=form" class="muted">Form</a>
+  <a href="?mode=admin" class="muted">Admin</a>
+</div>
 
-        <label for="name">Name</label>
-        <input id="name" placeholder="Jane Doe" />
+<div id="form" class="card" style="display:none;">
+  <h3>Inquiry Form</h3>
+  <input id="name" placeholder="Name" style="width:100%;margin-bottom:8px;">
+  <input id="contact" placeholder="Phone / Email" style="width:100%;margin-bottom:8px;">
+  <textarea id="message" placeholder="Message" style="width:100%;height:120px;"></textarea>
+  <button id="send">Send</button>
+  <div id="status" class="muted"></div>
+</div>
 
-        <label for="contact">Email or Phone</label>
-        <input id="contact" placeholder="jane@email.com or +43..." />
-
-        <label for="message">Message</label>
-        <textarea id="message" placeholder="Write your inquiry..."></textarea>
-
-        <div class="row">
-          <button class="primary" id="submit" type="button">Send Inquiry</button>
-          <button id="prefill" type="button">Prefill Example</button>
-        </div>
-
-        <p class="muted" id="formStatus" style="margin-top:10px;"></p>
-      </section>
-
-      <!-- ADMIN -->
-      <section class="card" id="adminCard" style="display:none;">
-        <h1>Admin Inbox (Your side)</h1>
-        <p class="muted">
-          Click <strong>Reply in Facebook (auto-written)</strong> to open Messenger to your Page with the original enquiry text pre-filled.
-        </p>
-
-        <div id="inbox" class="list"></div>
-        <div id="emptyState" class="empty" style="display:none;">
-          No inquiries yet. Open the <strong>Form</strong> and submit one.
-        </div>
-      </section>
-    </div>
-  </div>
+<div id="admin" class="card" style="display:none;">
+  <h3>Admin Dashboard</h3>
+  <div id="list"></div>
+</div>
 
 <script>
-  /******************************************************************
-   * CONFIG: Your Facebook Page
-   * Your example page URL includes the Page ID: 61585970293296
-   ******************************************************************/
-  const FB_PAGE_ID = "61585970293296"; // TagaCabugaan Digital Solutions (example)
-  // If you later set a username for your Page, you can use that instead:
-  // const FB_PAGE_ID = "yourpageusername";
+const STORAGE = "multi_channel_inquiries";
+const qs = new URLSearchParams(location.search);
+const mode = qs.get("mode") || "form";
+const source = qs.get("source") || "facebook";
 
-  // How much text to include in the auto-written message.
-  // Long messages may be truncated by Facebook/URL limits, so keep this reasonable.
-  const AUTO_WRITE_MAX_CHARS = 800;
-
-  const STORAGE_KEY = "inquiry_items_v2";
-
-  const qs = new URLSearchParams(location.search);
-  const mode = (qs.get("mode") || "form").toLowerCase();
-
-  const modeLabel = document.getElementById("modeLabel");
-  const thisUrl = document.getElementById("thisUrl");
-  thisUrl.textContent = location.href;
-
-  const formCard = document.getElementById("formCard");
-  const adminCard = document.getElementById("adminCard");
-
-  function loadItems() {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
-    catch { return []; }
+// 🔗 Channel targets
+const CHANNELS = {
+  facebook: () => "https://business.facebook.com/latest/inbox",
+  whatsapp: contact => {
+    const d = (contact || "").replace(/\D/g,"");
+    if (!d) return null;
+    const intl = d.startsWith("0") ? "63" + d.slice(1) : d;
+    return `https://wa.me/${intl}`;
+  },
+  viber: contact => {
+    const d = (contact || "").replace(/\D/g,"");
+    return d ? `viber://chat?number=%2B${d}` : null;
   }
-  function saveItems(items) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-  }
+};
 
-  function escapeHtml(s) {
-    return (s || "").replace(/[&<>"']/g, c => ({
-      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
-    }[c]));
-  }
+function load() {
+  return JSON.parse(localStorage.getItem(STORAGE) || "[]");
+}
+function save(d) {
+  localStorage.setItem(STORAGE, JSON.stringify(d));
+}
 
-  function setMode(m) {
-    modeLabel.textContent = (m === "admin") ? "Admin" : "Form";
-    formCard.style.display = (m === "admin") ? "none" : "block";
-    adminCard.style.display = (m === "admin") ? "block" : "none";
-    if (m === "admin") renderInbox();
-  }
+function buildCopyText(item) {
+  return (
+    `New inquiry (${item.source})\n` +
+    `Name: ${item.name}\n` +
+    `Contact: ${item.contact}\n` +
+    `Message:\n${item.message}\n\n` +
+    `Reply:\n`
+  );
+}
 
-  // --- FORM LOGIC ---
-  const nameEl = document.getElementById("name");
-  const contactEl = document.getElementById("contact");
-  const msgEl = document.getElementById("message");
-  const submitBtn = document.getElementById("submit");
-  const prefillBtn = document.getElementById("prefill");
-  const formStatus = document.getElementById("formStatus");
+// ---------- FORM ----------
+if (mode === "form") {
+  document.getElementById("form").style.display = "block";
+  document.getElementById("send").onclick = () => {
+    const name = name.value || "(no name)";
+    const contact = contact.value || "";
+    const message = message.value;
+    if (!message) return;
 
-  function newInquiryId() {
-    const d = new Date();
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    const t = String(Date.now()).slice(-5);
-    return `INQ-${y}${m}${day}-${t}`;
-  }
-
-  if (submitBtn) {
-    submitBtn.addEventListener("click", () => {
-      const name = nameEl.value.trim();
-      const contact = contactEl.value.trim();
-      const message = msgEl.value.trim();
-
-      if (!message) {
-        formStatus.textContent = "Please enter a message.";
-        return;
-      }
-
-      const items = loadItems();
-      const item = {
-        id: newInquiryId(),
-        name: name || "(no name)",
-        contact: contact || "(no contact)",
-        message,
-        createdAt: new Date().toISOString()
-      };
-      items.unshift(item);
-      saveItems(items);
-
-      formStatus.textContent = "Inquiry sent! Open Admin Inbox to view it and click Reply.";
-      nameEl.value = "";
-      contactEl.value = "";
-      msgEl.value = "";
+    const data = load();
+    data.unshift({
+      id: Date.now(),
+      name, contact, message,
+      source,
+      time: new Date().toISOString()
     });
-  }
+    save(data);
+    status.textContent = "Inquiry sent.";
+    message.value = "";
+  };
+}
 
-  if (prefillBtn) {
-    prefillBtn.addEventListener("click", () => {
-      nameEl.value = "Jane Doe";
-      contactEl.value = "jane@email.com";
-      msgEl.value = "Hello! I’d like to ask about pricing and availability.";
-      formStatus.textContent = "";
-    });
-  }
+// ---------- ADMIN ----------
+if (mode === "admin") {
+  document.getElementById("admin").style.display = "block";
+  const list = document.getElementById("list");
+  const data = load();
 
-  // --- ADMIN LOGIC ---
-  const inbox = document.getElementById("inbox");
-  const emptyState = document.getElementById("emptyState");
+  if (!data.length) list.innerHTML = "<div class='muted'>No inquiries</div>";
 
-  function buildFullEnquiry(item) {
-    return (
-      `Inquiry ID: ${item.id}\n` +
-      `Name: ${item.name}\n` +
-      `Contact: ${item.contact}\n` +
-      `Message: ${item.message}\n` +
-      `Received: ${new Date(item.createdAt).toLocaleString()}`
-    );
-  }
+  data.forEach(item => {
+    const div = document.createElement("div");
+    div.className = "card";
+    div.innerHTML = `
+      <strong>${item.name}</strong>
+      <div class="muted">${item.source}</div>
+      <p>${item.message}</p>
+      <div class="row">
+        <button>Copy + Open ${item.source}</button>
+      </div>
+    `;
 
-  function buildMessengerReplyUrl(item) {
-    const full = buildFullEnquiry(item);
-
-    // Keep within a safer length for URL + Facebook handling.
-    const safe = full.length > AUTO_WRITE_MAX_CHARS ? (full.slice(0, AUTO_WRITE_MAX_CHARS) + "…") : full;
-
-    // Messenger "auto-write" / context param:
-    // https://m.me/<PAGE_ID_OR_USERNAME>?ref=<TEXT>
-    return `https://m.me/${encodeURIComponent(FB_PAGE_ID)}?ref=${encodeURIComponent(safe)}`;
-  }
-
-  async function copyToClipboard(text) {
-    try {
+    div.querySelector("button").onclick = async () => {
+      const text = buildCopyText(item);
       await navigator.clipboard.writeText(text);
-      return true;
-    } catch {
-      return false;
-    }
-  }
 
-  function renderInbox() {
-    const items = loadItems();
-    inbox.innerHTML = "";
+      const opener = CHANNELS[item.source];
+      if (opener) {
+        const url = opener(item.contact);
+        if (url) window.open(url, "_blank");
+      }
+    };
 
-    if (!items.length) {
-      emptyState.style.display = "block";
-      return;
-    }
-    emptyState.style.display = "none";
-
-    items.forEach(item => {
-      const fullEnquiry = buildFullEnquiry(item);
-      const replyUrl = buildMessengerReplyUrl(item);
-
-      const div = document.createElement("div");
-      div.className = "item";
-      div.innerHTML = `
-        <strong>${escapeHtml(item.name)} <span class="muted">(${escapeHtml(item.contact)})</span></strong>
-        <div class="muted">Received: ${new Date(item.createdAt).toLocaleString()}</div>
-        <div class="muted" style="margin-top:6px;"><strong>Inquiry ID:</strong> <code>${escapeHtml(item.id)}</code></div>
-        <p style="margin:8px 0 10px;">${escapeHtml(item.message)}</p>
-
-        <div class="row">
-          <a class="btn primary" href="${escapeHtml(replyUrl)}" target="_blank" rel="noopener">
-            Reply in Facebook (auto-written)
-          </a>
-          <button class="btn" type="button" data-copy="1">Copy full enquiry</button>
-          <button class="btn" type="button" data-del="1">Delete</button>
-        </div>
-
-        <div class="muted" style="margin-top:10px;">
-          Reply link: <code>${escapeHtml(replyUrl)}</code>
-        </div>
-      `;
-
-      // Copy full enquiry
-      div.querySelector("button[data-copy]")?.addEventListener("click", async () => {
-        const ok = await copyToClipboard(fullEnquiry);
-        if (!ok) alert(fullEnquiry);
-      });
-
-      // Delete
-      div.querySelector("button[data-del]")?.addEventListener("click", () => {
-        const newItems = loadItems().filter(x => x.id !== item.id);
-        saveItems(newItems);
-        renderInbox();
-      });
-
-      inbox.appendChild(div);
-    });
-  }
-
-  // Clear
-  document.getElementById("clear").addEventListener("click", () => {
-    localStorage.removeItem(STORAGE_KEY);
-    if (mode === "admin") renderInbox();
-    if (mode === "form") formStatus.textContent = "Cleared.";
+    list.appendChild(div);
   });
-
-  // Start
-  setMode(mode);
+}
 </script>
+
 </body>
 </html>
