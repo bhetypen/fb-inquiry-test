@@ -260,31 +260,47 @@ function parseQS() {
 
         const isVisible = mode !== "admin";
 
-        function submit() {
-          const msg = message.trim();
-          if (!msg) {
-            setStatus("Please enter a message.");
-            return;
-          }
+        async function submit() {
+  const msg = message.trim();
+  if (!msg) {
+    setStatus("Please enter a message.");
+    return;
+  }
 
-          const item = {
-            id: (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now())),
-            source,
-            name: name.trim() || "(no name)",
-            contact: contact.trim() || "(no contact)",
-            message: msg,
-            createdAt: nowIso(),
-          };
+  const item = {
+    id: (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now())),
+    source,
+    name: name.trim() || "(no name)",
+    contact: contact.trim() || "(no contact)",
+    message: msg,
+    createdAt: nowIso(),
+  };
 
-          const items = loadItems();
-          items.unshift(item);
-          saveItems(items);
+  // ✅ still save locally
+  const items = loadItems();
+  items.unshift(item);
+  saveItems(items);
 
-          setStatus("Inquiry sent! Open Admin to view and reply.");
-          setName("");
-          setContact("");
-          setMessage("");
-        }
+  // ✅ send to "simple database" (Google Sheet endpoint)
+  try {
+    await fetch("https://script.google.com/macros/s/AKfycbywY2NAZBHEzgEmdl8pm53sllpbp2FdYrRyd0H4qimDeaQNTfeTAjl50iW_2vzpej1b/exec", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
+    });
+    setStatus("Inquiry sent! Saved to database.");
+  } catch (err) {
+    // still ok because localStorage saved it
+    setStatus("Inquiry sent! (Database save failed — still saved locally.)");
+  }
+
+  setName("");
+  setContact("");
+  setMessage("");
+}
+
+
+        
 
         function prefill() {
           setName("Jane Doe");
