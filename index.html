@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Multi-Channel Inquiry Dashboard</title>
+    <title>Multi-Channel Inquiry • Hostinger DB + Agent Dashboard</title>
 
     <!-- Tailwind CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -22,60 +22,54 @@
     <script type="text/babel">
       const { useEffect, useMemo, useState } = React;
 
-      // ===== Config =====
-      // Your example Facebook Page ID:
-      const FB_PAGE_ID = "61585970293296";
+      /********************************************************************
+       * ✅ CONFIG (CHANGE THESE 2 VALUES)
+       ********************************************************************/
+      // Your Hostinger API folder (where you uploaded /api/*.php)
+      // Example: https://form-test-for-smallbiz.bhetyhub.com/api
+      const API_BASE = "https://form-test-for-smallbiz.bhetyhub.com/api";
 
-      // LocalStorage key
-      const STORAGE_KEY = "inquiry_items_multi_channel_v1";
+      // Must match $API_KEY in Hostinger: public_html/api/_config.php
+      const API_KEY = "1kiAi!q6Q|U,,TL0.Rlzw!#U!$UhsYUk";
 
-      // Keep copied message nice and consistent. Ends with Reply: so agent can paste and type underneath.
-      function buildCopyText(item) {
-        // Use \n for real new lines (works when pasting into Messenger/WhatsApp/Viber)
-        return (
-          `New inquiry (${item.source || "unknown"})\n` +
-          `Name: ${item.name || "(no name)"}\n` +
-          `Contact: ${item.contact || "(no contact)"}\n` +
-          `Message:\n${item.message || ""}\n\n` +
-          `Reply:\n`
-        );
+      /********************************************************************
+       * OPTIONAL: LocalStorage key
+       ********************************************************************/
+      const STORAGE_KEY = "inquiries_local_v1";
+
+      /********************************************************************
+       * Helpers
+       ********************************************************************/
+      function safeParseJSON(s, fallback) {
+        try { return JSON.parse(s); } catch { return fallback; }
+      }
+
+      function loadLocal() {
+        return safeParseJSON(localStorage.getItem(STORAGE_KEY) || "[]", []);
+      }
+
+      function saveLocal(items) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
       }
 
       function nowIso() {
         return new Date().toISOString();
       }
 
-      function safeParseJSON(s, fallback) {
-        try {
-          return JSON.parse(s);
-        } catch {
-          return fallback;
-        }
-      }
-
-      function loadItems() {
-        return safeParseJSON(localStorage.getItem(STORAGE_KEY) || "[]", []);
-      }
-
-      function saveItems(items) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-      }
-
       function normalizeSource(s) {
-  const v = (s || "").toLowerCase().trim();
-  if (v === "whatsapp" || v === "wa" || v === "whats" || v === "whatsup" || v === "whats_app") return "whatsapp";
-  if (v === "viber" || v === "vb") return "viber";
-  if (v === "facebook" || v === "fb" || v === "messenger") return "facebook";
-  return "facebook"; // fallback
-}
+        const v = (s || "").toLowerCase().trim();
+        if (["whatsapp", "wa", "whats", "whatsup", "whats_app"].includes(v)) return "whatsapp";
+        if (["viber", "vb"].includes(v)) return "viber";
+        if (["facebook", "fb", "messenger"].includes(v)) return "facebook";
+        return "facebook";
+      }
 
-function parseQS() {
-  const qs = new URLSearchParams(window.location.search);
-  const mode = (qs.get("mode") || "form").toLowerCase();
-  const source = normalizeSource(qs.get("source") || "facebook");
-  return { mode, source };
-}
-
+      function parseQS() {
+        const qs = new URLSearchParams(window.location.search);
+        const mode = (qs.get("mode") || "form").toLowerCase(); // form | admin
+        const source = normalizeSource(qs.get("source") || "facebook");
+        return { mode, source };
+      }
 
       function setQS(params) {
         const qs = new URLSearchParams(window.location.search);
@@ -88,55 +82,29 @@ function parseQS() {
         window.dispatchEvent(new Event("popstate"));
       }
 
-      // Channel openers:
-      // - Facebook: open Business Inbox (best for agents)
-      // - WhatsApp: open wa.me/<number>
-      // - Viber: open viber://chat?number=%2B<digits>
       function digitsOnly(s) {
         return (s || "").replace(/\D/g, "");
       }
 
       function toWhatsAppNumber(contact) {
         // Basic PH-friendly normalization:
-        // - if starts with 0 => replace with 63
-        // - if already starts with 63 => ok
-        // - else use as-is (works if user enters full intl)
+        // 0917xxxxxxx -> 63917xxxxxxx
+        // +63... / 63... -> keep digits
         const d = digitsOnly(contact);
         if (!d) return null;
         if (d.startsWith("0")) return "63" + d.slice(1);
         return d;
       }
 
-      function openChannel(source, contact) {
-        if (source === "facebook") {
-          // Option A: Business Inbox (recommended)
-          window.open("https://business.facebook.com/latest/inbox", "_blank", "noopener");
-          return;
-        }
-
-        if (source === "whatsapp") {
-          const wa = toWhatsAppNumber(contact);
-          if (!wa) {
-            window.open("https://wa.me/", "_blank", "noopener");
-            return;
-          }
-          window.open(`https://wa.me/${wa}`, "_blank", "noopener");
-          return;
-        }
-
-        if (source === "viber") {
-          const d = digitsOnly(contact);
-          // Viber deep link mostly works on mobile (and desktop with Viber installed)
-          if (!d) {
-            alert("No phone number found for Viber. Please add a number in Contact.");
-            return;
-          }
-          window.location.href = `viber://chat?number=%2B${d}`;
-          return;
-        }
-
-        // fallback
-        window.open("https://business.facebook.com/latest/inbox", "_blank", "noopener");
+      function buildCopyText(item) {
+        // Real new lines using \n (works when pasting)
+        return (
+          `New inquiry (${item.source || "unknown"})\n` +
+          `Name: ${item.name || "(no name)"}\n` +
+          `Contact: ${item.contact || "(no contact)"}\n` +
+          `Message:\n${item.message || ""}\n\n` +
+          `Reply:\n`
+        );
       }
 
       async function copyToClipboard(text) {
@@ -148,31 +116,100 @@ function parseQS() {
         }
       }
 
-      function Badge({ children, tone = "slate" }) {
-        const tones = {
-          slate: "bg-slate-800/70 text-slate-200 ring-slate-700/70",
-          indigo: "bg-indigo-500/15 text-indigo-200 ring-indigo-400/30",
-          emerald: "bg-emerald-500/15 text-emerald-200 ring-emerald-400/30",
-          rose: "bg-rose-500/15 text-rose-200 ring-rose-400/30",
-          amber: "bg-amber-500/15 text-amber-200 ring-amber-400/30",
-        };
+      function openChannel(source, contact) {
+        const s = normalizeSource(source);
+
+        if (s === "facebook") {
+          window.open("https://business.facebook.com/latest/inbox", "_blank", "noopener");
+          return;
+        }
+
+        if (s === "whatsapp") {
+          const wa = toWhatsAppNumber(contact);
+          if (!wa) {
+            // Open WhatsApp, but not a specific chat
+            window.open("https://wa.me/", "_blank", "noopener");
+            return;
+          }
+          window.open(`https://wa.me/${wa}`, "_blank", "noopener");
+          return;
+        }
+
+        if (s === "viber") {
+          const d = digitsOnly(contact);
+          if (!d) {
+            alert("No phone number found. For Viber we need a phone number in Contact.");
+            return;
+          }
+          // Works best on mobile or when Viber is installed
+          window.location.href = `viber://chat?number=%2B${d}`;
+          return;
+        }
+
+        window.open("https://business.facebook.com/latest/inbox", "_blank", "noopener");
+      }
+
+      function SourcePill({ source }) {
+        const s = normalizeSource(source);
+        const cls =
+          s === "facebook"
+            ? "bg-indigo-500/15 text-indigo-100 ring-indigo-400/30"
+            : s === "whatsapp"
+            ? "bg-emerald-500/15 text-emerald-100 ring-emerald-400/30"
+            : s === "viber"
+            ? "bg-rose-500/15 text-rose-100 ring-rose-400/30"
+            : "bg-slate-800/60 text-slate-200 ring-white/10";
+
+        const label =
+          s === "facebook" ? "Facebook" : s === "whatsapp" ? "WhatsApp" : s === "viber" ? "Viber" : "Unknown";
+
         return (
-          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${tones[tone] || tones.slate}`}>
-            {children}
+          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ${cls}`}>
+            {label}
           </span>
         );
       }
 
-      function SourcePill({ source }) {
-        const s = (source || "").toLowerCase();
-        if (s === "facebook") return <Badge tone="indigo">Facebook</Badge>;
-        if (s === "whatsapp") return <Badge tone="emerald">WhatsApp</Badge>;
-        if (s === "viber") return <Badge tone="rose">Viber</Badge>;
-        return <Badge tone="slate">{source || "Unknown"}</Badge>;
+      /********************************************************************
+       * Hostinger DB API calls
+       ********************************************************************/
+      async function dbCreate(item) {
+        const res = await fetch(`${API_BASE}/inquiry_create.php`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": API_KEY,
+          },
+          body: JSON.stringify(item),
+        });
+
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || json.ok === false) throw new Error("DB create failed");
+        return true;
       }
 
+      async function dbList(limit = 100) {
+        const res = await fetch(`${API_BASE}/inquiry_list.php?limit=${encodeURIComponent(limit)}`, {
+          method: "GET",
+          headers: { "X-API-Key": API_KEY },
+        });
+
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.ok) throw new Error("DB list failed");
+
+        // Normalize createdAt if it comes like "YYYY-MM-DD HH:MM:SS"
+        return (json.items || []).map((x) => ({
+          ...x,
+          source: normalizeSource(x.source),
+          createdAt: (x.createdAt || "").includes("T") ? x.createdAt : (x.createdAt ? x.createdAt.replace(" ", "T") : ""),
+        }));
+      }
+
+      /********************************************************************
+       * App
+       ********************************************************************/
       function App() {
-        const [{ mode, source }, setRoute] = useState(parseQS());
+        const [route, setRoute] = useState(parseQS());
 
         useEffect(() => {
           const handler = () => setRoute(parseQS());
@@ -182,10 +219,10 @@ function parseQS() {
 
         return (
           <div className="mx-auto max-w-6xl px-4 py-8">
-            <Header mode={mode} source={source} />
+            <Header mode={route.mode} source={route.source} />
             <div className="mt-6 grid gap-5 lg:grid-cols-2">
-              <FormCard mode={mode} source={source} />
-              <AdminCard mode={mode} />
+              <FormCard mode={route.mode} source={route.source} />
+              <AdminCard mode={route.mode} />
             </div>
             <Footer />
           </div>
@@ -193,6 +230,8 @@ function parseQS() {
       }
 
       function Header({ mode, source }) {
+        const base = window.location.origin + window.location.pathname;
+
         return (
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -201,7 +240,7 @@ function parseQS() {
                 <div>
                   <div className="text-lg font-extrabold tracking-tight">Inquiry Form + Agent Dashboard</div>
                   <div className="text-xs text-slate-300/80">
-                    LocalStorage demo • Copy enquiry → open original channel → Ctrl+V
+                    Hostinger DB + localStorage fallback • Copy → Ctrl+V reply
                   </div>
                 </div>
               </div>
@@ -210,39 +249,49 @@ function parseQS() {
                 <span className="rounded-full bg-slate-800/60 px-3 py-1 text-xs font-semibold text-slate-200 ring-1 ring-white/10">
                   Mode: <span className="text-white">{mode}</span>
                 </span>
-
                 <span className="rounded-full bg-slate-800/60 px-3 py-1 text-xs font-semibold text-slate-200 ring-1 ring-white/10">
                   Source: <span className="text-white">{source}</span>
                 </span>
+                <SourcePill source={source} />
 
                 <button
                   className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-bold text-white hover:bg-white/[0.10]"
                   onClick={() => setQS({ mode: "form" })}
+                  type="button"
                 >
                   Open Form
                 </button>
-
                 <button
                   className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-bold text-white hover:bg-white/[0.10]"
                   onClick={() => setQS({ mode: "admin" })}
+                  type="button"
                 >
                   Open Admin
                 </button>
-
-                <div className="hidden sm:block">
-                  <SourcePill source={source} />
-                </div>
               </div>
             </div>
 
             <div className="mt-4 text-xs text-slate-300/80">
-              Share links:
-              <span className="ml-2 font-semibold text-white/90">Facebook</span>{" "}
-              <code className="rounded bg-black/30 px-1.5 py-0.5 text-[11px]">?mode=form&source=facebook</code>
-              <span className="ml-3 font-semibold text-white/90">WhatsApp</span>{" "}
-              <code className="rounded bg-black/30 px-1.5 py-0.5 text-[11px]">?mode=form&source=whatsapp</code>
-              <span className="ml-3 font-semibold text-white/90">Viber</span>{" "}
-              <code className="rounded bg-black/30 px-1.5 py-0.5 text-[11px]">?mode=form&source=viber</code>
+              Share these links in chats (so the inquiry saves the correct source):
+              <div className="mt-2 grid gap-1 text-[11px]">
+                <div>
+                  <span className="font-semibold text-white/90">Facebook:</span>{" "}
+                  <code className="rounded bg-black/30 px-1.5 py-0.5">{base}?mode=form&source=facebook</code>
+                </div>
+                <div>
+                  <span className="font-semibold text-white/90">WhatsApp:</span>{" "}
+                  <code className="rounded bg-black/30 px-1.5 py-0.5">{base}?mode=form&source=whatsapp</code>
+                </div>
+                <div>
+                  <span className="font-semibold text-white/90">Viber:</span>{" "}
+                  <code className="rounded bg-black/30 px-1.5 py-0.5">{base}?mode=form&source=viber</code>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs text-slate-300/80">
+              <span className="font-semibold text-white/90">Note:</span> Auto-paste into Messenger/WhatsApp/Viber is not allowed by browsers.
+              The agent flow is: <span className="font-semibold text-white/90">Copy + Open</span> → go to chat → <span className="font-semibold text-white/90">Ctrl+V</span> → type reply under <span className="font-semibold text-white/90">Reply:</span>.
             </div>
           </div>
         );
@@ -253,54 +302,56 @@ function parseQS() {
         const [contact, setContact] = useState("");
         const [message, setMessage] = useState("");
         const [status, setStatus] = useState("");
+        const [saving, setSaving] = useState(false);
 
-        useEffect(() => {
-          setStatus("");
-        }, [mode, source]);
-
-        const isVisible = mode !== "admin";
+        const visible = mode !== "admin";
 
         async function submit() {
-  const msg = message.trim();
-  if (!msg) {
-    setStatus("Please enter a message.");
-    return;
-  }
+          const msg = message.trim();
+          const contactVal = contact.trim();
 
-  const item = {
-    id: (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now())),
-    source,
-    name: name.trim() || "(no name)",
-    contact: contact.trim() || "(no contact)",
-    message: msg,
-    createdAt: nowIso(),
-  };
+          if (!msg) {
+            setStatus("Please enter a message.");
+            return;
+          }
 
-  // ✅ still save locally
-  const items = loadItems();
-  items.unshift(item);
-  saveItems(items);
+          // Viber needs phone to open chat reliably
+          if (normalizeSource(source) === "viber" && !contactVal) {
+            setStatus("Phone number is required to reply on Viber.");
+            return;
+          }
 
-  // ✅ send to "simple database" (Google Sheet endpoint)
-  try {
-    await fetch("https://script.google.com/macros/s/AKfycbywY2NAZBHEzgEmdl8pm53sllpbp2FdYrRyd0H4qimDeaQNTfeTAjl50iW_2vzpej1b/exec", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(item),
-    });
-    setStatus("Inquiry sent! Saved to database.");
-  } catch (err) {
-    // still ok because localStorage saved it
-    setStatus("Inquiry sent! (Database save failed — still saved locally.)");
-  }
+          const item = {
+            id: (crypto?.randomUUID ? crypto.randomUUID() : String(Date.now())),
+            source: normalizeSource(source),
+            name: name.trim() || "(no name)",
+            contact: contactVal || "(no contact)",
+            message: msg,
+            createdAt: nowIso(),
+            userAgent: navigator.userAgent,
+            pageUrl: window.location.href,
+          };
 
-  setName("");
-  setContact("");
-  setMessage("");
-}
+          // ✅ always save locally (fallback)
+          const local = loadLocal();
+          local.unshift(item);
+          saveLocal(local);
 
+          // ✅ try DB save
+          setSaving(true);
+          try {
+            await dbCreate(item);
+            setStatus("Inquiry sent! Saved to database.");
+          } catch {
+            setStatus("Inquiry sent! (Database save failed — saved locally.)");
+          } finally {
+            setSaving(false);
+          }
 
-        
+          setName("");
+          setContact("");
+          setMessage("");
+        }
 
         function prefill() {
           setName("Jane Doe");
@@ -310,12 +361,12 @@ function parseQS() {
         }
 
         return (
-          <div className={`rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur ${isVisible ? "" : "opacity-60"}`}>
+          <div className={`rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur ${visible ? "" : "opacity-60"}`}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-base font-extrabold tracking-tight">Inquiry Form</h2>
                 <p className="mt-1 text-sm text-slate-300/80">
-                  Customer fills this form. The <span className="font-semibold text-white/90">source</span> is saved from the URL.
+                  Customer fills this form. Source comes from the URL <code className="rounded bg-black/30 px-1.5 py-0.5 text-[11px]">source=</code>.
                 </p>
               </div>
               <SourcePill source={source} />
@@ -333,7 +384,11 @@ function parseQS() {
               </div>
 
               <div>
-                <label className="text-xs font-bold text-slate-300">Contact (phone/email)</label>
+                <label className="text-xs font-bold text-slate-300">
+                  Contact (phone/email)
+                  {normalizeSource(source) === "viber" && <span className="ml-2 text-rose-300">(required for Viber)</span>}
+                  {normalizeSource(source) === "whatsapp" && <span className="ml-2 text-emerald-200/80">(phone recommended)</span>}
+                </label>
                 <input
                   className="mt-1 w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder:text-slate-400 focus:border-indigo-400/50 focus:outline-none"
                   value={contact}
@@ -341,7 +396,7 @@ function parseQS() {
                   placeholder="0917… or email"
                 />
                 <div className="mt-1 text-xs text-slate-400">
-                  Tip: For WhatsApp/Viber open links, a phone number works best.
+                  For WhatsApp/Viber “Open chat”, a phone number works best.
                 </div>
               </div>
 
@@ -357,11 +412,14 @@ function parseQS() {
 
               <div className="flex flex-wrap gap-2 pt-1">
                 <button
-                  className="rounded-2xl border border-indigo-400/30 bg-indigo-500/20 px-4 py-3 text-sm font-extrabold text-white hover:bg-indigo-500/25"
+                  className="rounded-2xl border border-indigo-400/30 bg-indigo-500/20 px-4 py-3 text-sm font-extrabold text-white hover:bg-indigo-500/25 disabled:opacity-60"
                   onClick={submit}
+                  disabled={saving}
+                  type="button"
                 >
-                  Send Inquiry
+                  {saving ? "Sending…" : "Send Inquiry"}
                 </button>
+
                 <button
                   className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-bold text-white hover:bg-white/[0.10]"
                   onClick={prefill}
@@ -369,6 +427,7 @@ function parseQS() {
                 >
                   Prefill Example
                 </button>
+
                 <button
                   className="rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-bold text-white hover:bg-white/[0.10]"
                   onClick={() => setQS({ mode: "admin" })}
@@ -385,21 +444,8 @@ function parseQS() {
               ) : null}
 
               <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-xs text-slate-300/80">
-                Share this page in chats with the right source:
-                <div className="mt-2 grid gap-1 text-[11px]">
-                  <div>
-                    <span className="font-semibold text-white/90">Facebook:</span>{" "}
-                    <code className="rounded bg-black/30 px-1.5 py-0.5">?mode=form&source=facebook</code>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-white/90">WhatsApp:</span>{" "}
-                    <code className="rounded bg-black/30 px-1.5 py-0.5">?mode=form&source=whatsapp</code>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-white/90">Viber:</span>{" "}
-                    <code className="rounded bg-black/30 px-1.5 py-0.5">?mode=form&source=viber</code>
-                  </div>
-                </div>
+                This page saves to <span className="font-semibold text-white/90">Hostinger DB</span> and also keeps a{" "}
+                <span className="font-semibold text-white/90">localStorage fallback</span>.
               </div>
             </div>
           </div>
@@ -407,60 +453,73 @@ function parseQS() {
       }
 
       function AdminCard({ mode }) {
-        const [items, setItems] = useState(() => loadItems());
+        const [items, setItems] = useState([]);
         const [toast, setToast] = useState("");
+        const [loading, setLoading] = useState(false);
+        const [view, setView] = useState("db"); // db | local
+
+        const visible = mode === "admin";
+
+        async function refreshDb() {
+          setLoading(true);
+          try {
+            const data = await dbList(120);
+            setItems(data);
+            setView("db");
+            setToast("Loaded from database.");
+          } catch {
+            setToast("Could not load DB. Showing localStorage fallback.");
+            setItems(loadLocal());
+            setView("local");
+          } finally {
+            setLoading(false);
+            setTimeout(() => setToast(""), 1600);
+          }
+        }
+
+        function refreshLocal() {
+          setItems(loadLocal());
+          setView("local");
+          setToast("Loaded from localStorage.");
+          setTimeout(() => setToast(""), 1600);
+        }
 
         useEffect(() => {
-          // Refresh list when switching modes or coming back
-          const handler = () => setItems(loadItems());
-          window.addEventListener("popstate", handler);
-          return () => window.removeEventListener("popstate", handler);
+          // On initial mount, try DB first
+          refreshDb();
         }, []);
 
-        function refresh() {
-          setItems(loadItems());
-        }
-
-        function clearAll() {
+        function clearLocal() {
           localStorage.removeItem(STORAGE_KEY);
-          setItems([]);
-          setToast("Cleared all inquiries.");
-          setTimeout(() => setToast(""), 1400);
-        }
-
-        function deleteOne(id) {
-          const next = loadItems().filter((x) => x.id !== id);
-          saveItems(next);
-          setItems(next);
+          if (view === "local") setItems([]);
+          setToast("Cleared localStorage items.");
+          setTimeout(() => setToast(""), 1600);
         }
 
         async function copyOnly(item) {
           const text = buildCopyText(item);
           const ok = await copyToClipboard(text);
           setToast(ok ? "Copied! Paste (Ctrl+V) in chat." : "Copy blocked. Check browser permissions.");
-          setTimeout(() => setToast(""), 1600);
+          setTimeout(() => setToast(""), 1800);
           if (!ok) alert(text);
         }
 
         async function copyAndOpen(item) {
           const text = buildCopyText(item);
           const ok = await copyToClipboard(text);
-          // Open the channel after copying (agent then Ctrl+V)
-          openChannel((item.source || "").toLowerCase(), item.contact);
-          setToast(ok ? "Copied + opened channel. Paste (Ctrl+V) then type reply." : "Opened channel. Copy blocked—use manual copy.");
-          setTimeout(() => setToast(""), 1800);
+          openChannel(item.source, item.contact);
+          setToast(ok ? "Copied + opened channel. Ctrl+V then reply." : "Opened channel. Copy blocked — use manual copy.");
+          setTimeout(() => setToast(""), 2000);
           if (!ok) alert(text);
         }
 
-        const isVisible = mode === "admin";
-
         return (
-          <div className={`rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur ${isVisible ? "" : "opacity-60"}`}>
+          <div className={`rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur ${visible ? "" : "opacity-60"}`}>
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-base font-extrabold tracking-tight">Admin Dashboard</h2>
                 <p className="mt-1 text-sm text-slate-300/80">
-                  Click <span className="font-semibold text-white/90">Copy + Open</span>, then paste in the original chat and type your reply under <span className="font-semibold text-white/90">Reply:</span>.
+                  Prefer DB view. If DB fails, you can still use localStorage fallback.
                 </p>
               </div>
 
@@ -468,15 +527,31 @@ function parseQS() {
                 <button
                   className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-bold text-white hover:bg-white/[0.10]"
                   onClick={() => setQS({ mode: "admin" })}
+                  type="button"
                 >
                   Stay on Admin
                 </button>
                 <button
-                  className="rounded-2xl border border-rose-400/30 bg-rose-500/15 px-3 py-2 text-sm font-extrabold text-rose-100 hover:bg-rose-500/20"
-                  onClick={clearAll}
+                  className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-bold text-white hover:bg-white/[0.10] disabled:opacity-60"
+                  onClick={refreshDb}
+                  disabled={loading}
                   type="button"
                 >
-                  Clear All
+                  {loading ? "Loading…" : "Refresh DB"}
+                </button>
+                <button
+                  className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-bold text-white hover:bg-white/[0.10]"
+                  onClick={refreshLocal}
+                  type="button"
+                >
+                  View Local
+                </button>
+                <button
+                  className="rounded-2xl border border-rose-400/30 bg-rose-500/15 px-3 py-2 text-sm font-extrabold text-rose-100 hover:bg-rose-500/20"
+                  onClick={clearLocal}
+                  type="button"
+                >
+                  Clear Local
                 </button>
               </div>
             </div>
@@ -487,26 +562,20 @@ function parseQS() {
               </div>
             ) : null}
 
-            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+            <div className="mt-4 flex items-center justify-between">
               <div className="text-xs text-slate-400">
-                Stored locally in this browser only (localStorage).
+                Viewing:{" "}
+                <span className="font-semibold text-white/80">
+                  {view === "db" ? "Database (Hostinger)" : "localStorage"}
+                </span>
               </div>
-              <div className="flex gap-2">
-                <button
-                  className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-bold text-white hover:bg-white/[0.10]"
-                  onClick={refresh}
-                  type="button"
-                >
-                  Refresh
-                </button>
-                <button
-                  className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-bold text-white hover:bg-white/[0.10]"
-                  onClick={() => setQS({ mode: "form" })}
-                  type="button"
-                >
-                  Go to Form
-                </button>
-              </div>
+              <button
+                className="rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-sm font-bold text-white hover:bg-white/[0.10]"
+                onClick={() => setQS({ mode: "form" })}
+                type="button"
+              >
+                Go to Form
+              </button>
             </div>
 
             <div className="mt-4 space-y-3">
@@ -523,13 +592,16 @@ function parseQS() {
                           <div className="text-sm font-extrabold">{item.name}</div>
                           <SourcePill source={item.source} />
                         </div>
+
                         <div className="mt-1 text-xs text-slate-300/70">
                           <span className="font-semibold text-white/80">Contact:</span> {item.contact}
                         </div>
+
                         <div className="mt-1 text-xs text-slate-300/70">
                           <span className="font-semibold text-white/80">Received:</span>{" "}
-                          {new Date(item.createdAt).toLocaleString()}
+                          {item.createdAt ? new Date(item.createdAt).toLocaleString() : "—"}
                         </div>
+
                         <div className="mt-1 text-xs text-slate-300/70">
                           <span className="font-semibold text-white/80">ID:</span>{" "}
                           <span className="rounded bg-black/30 px-1.5 py-0.5 font-mono text-[11px]">{item.id}</span>
@@ -550,15 +622,7 @@ function parseQS() {
                           onClick={() => copyOnly(item)}
                           type="button"
                         >
-                          Copy only
-                        </button>
-
-                        <button
-                          className="rounded-2xl border border-rose-400/30 bg-rose-500/15 px-3 py-2 text-sm font-extrabold text-rose-100 hover:bg-rose-500/20"
-                          onClick={() => deleteOne(item.id)}
-                          type="button"
-                        >
-                          Delete
+                          Copy Only
                         </button>
                       </div>
                     </div>
@@ -568,7 +632,9 @@ function parseQS() {
                     </div>
 
                     <div className="mt-3 text-xs text-slate-400">
-                      Tip for agents: Click <span className="font-semibold text-white/80">Copy + Open</span>, then in chat press <span className="font-semibold text-white/80">Ctrl+V</span> and type your reply under <span className="font-semibold text-white/80">Reply:</span>.
+                      Agent: click <span className="font-semibold text-white/80">Copy + Open</span> → go to chat →{" "}
+                      <span className="font-semibold text-white/80">Ctrl+V</span> → type reply under{" "}
+                      <span className="font-semibold text-white/80">Reply:</span> → send.
                     </div>
                   </div>
                 ))
@@ -581,7 +647,7 @@ function parseQS() {
       function Footer() {
         return (
           <div className="mt-6 text-center text-xs text-slate-400">
-            Demo only • Inquiries are saved in localStorage (same device/browser) • For real production use you’ll want a database.
+            Hostinger DB endpoints: <span className="font-mono">{API_BASE}</span> • Keep your API key secret.
           </div>
         );
       }
