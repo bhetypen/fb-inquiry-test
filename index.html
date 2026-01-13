@@ -61,12 +61,21 @@
         localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
       }
 
-      function parseQS() {
-        const qs = new URLSearchParams(window.location.search);
-        const mode = (qs.get("mode") || "form").toLowerCase(); // form | admin
-        const source = (qs.get("source") || "facebook").toLowerCase(); // facebook | whatsapp | viber
-        return { mode, source };
-      }
+      function normalizeSource(s) {
+  const v = (s || "").toLowerCase().trim();
+  if (v === "whatsapp" || v === "wa" || v === "whats" || v === "whatsup" || v === "whats_app") return "whatsapp";
+  if (v === "viber" || v === "vb") return "viber";
+  if (v === "facebook" || v === "fb" || v === "messenger") return "facebook";
+  return "facebook"; // fallback
+}
+
+function parseQS() {
+  const qs = new URLSearchParams(window.location.search);
+  const mode = (qs.get("mode") || "form").toLowerCase();
+  const source = normalizeSource(qs.get("source") || "facebook");
+  return { mode, source };
+}
+
 
       function setQS(params) {
         const qs = new URLSearchParams(window.location.search);
