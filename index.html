@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Inquiry Form → Admin → Reply Redirect Test</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 28px; line-height: 1.45; }
+    .wrap { max-width: 960px; margin: 0 auto; }
+    .topbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom: 16px; }
+    .pill { padding: 6px 10px; border:1px solid #ddd; border-radius:999px; background:#fafafa; font-size: 13px; }
+    .grid { display:grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 900px){ .grid { grid-template-columns: 1fr 1fr; } }
+    .card { border: 1px solid #ddd; border-radius: 16px; padding: 16px; }
+    h1 { margin: 0 0 8px; font-size: 22px; }
+    h2 { margin: 0 0 8px; font-size: 18px; }
+    label { display:block; font-weight: 600; margin: 10px 0 6px; }
+    input, textarea {
+      width: 100%; padding: 10px 12px; border: 1px solid #ccc; border-radius: 12px; font-size: 15px;
+    }
+    textarea { min-height: 110px; resize: vertical; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px; }
+    button, a.btn {
+      display:inline-block; padding: 10px 12px; border-radius: 12px;
+      border: 1px solid #ccc; background: #fff; cursor: pointer;
+      text-decoration:none; color:#111; font-weight: 650;
+    }
+    button.primary, a.btn.primary { border-color:#111; }
+    .muted { color:#555; font-size: 13px; }
+    .list { display:flex; flex-direction:column; gap: 10px; margin-top: 10px; }
+    .item { border: 1px solid #eee; border-radius: 14px; padding: 12px; background: #fafafa; }
+    .item strong { display:block; margin-bottom: 4px; }
+    code { word-break: break-all; }
+    .empty { padding: 12px; border: 1px dashed #ccc; border-radius: 14px; color:#555; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <span class="pill"><strong>Mode:</strong> <span id="modeLabel">Form</span></span>
+      <span class="pill"><strong>This page URL:</strong> <code id="thisUrl"></code></span>
+      <a class="btn" id="goForm" href="?mode=form">Open Form</a>
+      <a class="btn" id="goAdmin" href="?mode=admin">Open Admin Inbox</a>
+      <button class="btn" id="clear">Clear Test Inquiries</button>
+    </div>
+
+    <div class="grid">
+      <!-- FORM -->
+      <section class="card" id="formCard" style="display:none;">
+        <h1>Inquiry Form (User side)</h1>
+        <p class="muted">
+          This simulates the page where the inquiry is generated. When submitted, we store the inquiry plus the
+          <strong>generatedFrom URL</strong> (this page’s URL).
+        </p>
+
+        <label for="name">Name</label>
+        <input id="name" placeholder="Jane Doe" />
+
+        <label for="contact">Email or Phone</label>
+        <input id="contact" placeholder="jane@email.com or +43..." />
+
+        <label for="message">Message</label>
+        <textarea id="message" placeholder="Write your inquiry..."></textarea>
+
+        <div class="row">
+          <button class="primary" id="submit">Send Inquiry</button>
+          <button id="prefill" type="button">Prefill Example</button>
+        </div>
+
+        <p class="muted" id="formStatus" style="margin-top:10px;"></p>
+      </section>
+
+      <!-- ADMIN -->
+      <section class="card" id="adminCard" style="display:none;">
+        <h1>Admin Inbox (Your side)</h1>
+        <p class="muted">
+          This simulates “you receiving the inquiry”. Click <strong>Reply</strong> to return to the exact page
+          where the inquiry was generated.
+        </p>
+
+        <div id="inbox" class="list"></div>
+        <div id="emptyState" class="empty" style="display:none;">
+          No inquiries yet. Open the <strong>Form</strong> and submit one.
+        </div>
+      </section>
+    </div>
+  </div>
+
+<script>
+  const STORAGE_KEY = "inquiry_test_items_v1";
+
+  const qs = new URLSearchParams(location.search);
+  const mode = (qs.get("mode") || "form").toLowerCase();
+
+  const modeLabel = document.getElementById("modeLabel");
+  const thisUrl = document.getElementById("thisUrl");
+  thisUrl.textContent = location.href;
+
+  const formCard = document.getElementById("formCard");
+  const adminCard = document.getElementById("adminCard");
+
+  function loadItems() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
+    catch { return []; }
+  }
+
+  function saveItems(items) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  }
+
+  function escapeHtml(s) {
+    return (s || "").replace(/[&<>"']/g, c => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"
+    }[c]));
+  }
+
+  function setMode(m) {
+    modeLabel.textContent = (m === "admin") ? "Admin" : "Form";
+    formCard.style.display = (m === "admin") ? "none" : "block";
+    adminCard.style.display = (m === "admin") ? "block" : "none";
+    if (m === "admin") renderInbox();
+  }
+
+  // --- FORM LOGIC ---
+  const nameEl = document.getElementById("name");
+  const contactEl = document.getElementById("contact");
+  const msgEl = document.getElementById("message");
+  const submitBtn = document.getElementById("submit");
+  const prefillBtn = document.getElementById("prefill");
+  const formStatus = document.getElementById("formStatus");
+
+  if (submitBtn) {
+    submitBtn.addEventListener("click", () => {
+      const name = nameEl.value.trim();
+      const contact = contactEl.value.trim();
+      const message = msgEl.value.trim();
+
+      if (!message) {
+        formStatus.textContent = "Please enter a message.";
+        return;
+      }
+
+      const items = loadItems();
+      const item = {
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+        name: name || "(no name)",
+        contact: contact || "(no contact)",
+        message,
+        createdAt: new Date().toISOString(),
+        // This is the key part: where the form was generated
+        generatedFrom: location.href
+      };
+      items.unshift(item);
+      saveItems(items);
+
+      formStatus.textContent = "Inquiry sent! Now open Admin Inbox to view it and click Reply.";
+      nameEl.value = "";
+      contactEl.value = "";
+      msgEl.value = "";
+    });
+  }
+
+  if (prefillBtn) {
+    prefillBtn.addEventListener("click", () => {
+      nameEl.value = "Jane Doe";
+      contactEl.value = "jane@email.com";
+      msgEl.value = "Hi! I’d like to ask about pricing and availability.";
+      formStatus.textContent = "";
+    });
+  }
+
+  // --- ADMIN LOGIC ---
+  const inbox = document.getElementById("inbox");
+  const emptyState = document.getElementById("emptyState");
+
+  function renderInbox() {
+    const items = loadItems();
+    inbox.innerHTML = "";
+
+    if (!items.length) {
+      emptyState.style.display = "block";
+      return;
+    }
+    emptyState.style.display = "none";
+
+    items.forEach(item => {
+      const div = document.createElement("div");
+      div.className = "item";
+      div.innerHTML = `
+        <strong>${escapeHtml(item.name)} <span class="muted">(${escapeHtml(item.contact)})</span></strong>
+        <div class="muted">Received: ${new Date(item.createdAt).toLocaleString()}</div>
+        <p style="margin:8px 0 10px;">${escapeHtml(item.message)}</p>
+        <div class="muted" style="margin-bottom:10px;">
+          Generated from: <code>${escapeHtml(item.generatedFrom)}</code>
+        </div>
+        <div class="row">
+          <a class="btn primary" href="${escapeHtml(item.generatedFrom)}">Reply (go back to source page)</a>
+          <button class="btn" data-id="${escapeHtml(item.id)}" type="button">Delete</button>
+        </div>
+      `;
+      div.querySelector("button[data-id]").addEventListener("click", (e) => {
+        const id = e.currentTarget.getAttribute("data-id");
+        const newItems = loadItems().filter(x => x.id !== id);
+        saveItems(newItems);
+        renderInbox();
+      });
+      inbox.appendChild(div);
+    });
+  }
+
+  // Clear
+  document.getElementById("clear").addEventListener("click", () => {
+    localStorage.removeItem(STORAGE_KEY);
+    if (mode === "admin") renderInbox();
+    if (mode === "form") formStatus.textContent = "Cleared.";
+  });
+
+  // Start
+  setMode(mode);
+</script>
+</body>
+</html>
