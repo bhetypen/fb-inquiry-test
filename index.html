@@ -136,15 +136,28 @@
         }
 
         if (s === "viber") {
-          const d = digitsOnly(contact);
-          if (!d) {
-            alert("No phone number found. For Viber we need a phone number in Contact.");
-            return;
-          }
-          // Works best on mobile or when Viber is installed
-          window.location.href = `viber://chat?number=%2B${d}`;
-          return;
-        }
+  const d = digitsOnly(contact);
+  if (!d) {
+    alert("No phone number found. For Viber we need a phone number in Contact.");
+    return;
+  }
+
+  const viberUrl = `viber://chat?number=%2B${d}`;
+
+  const a = document.createElement("a");
+  a.href = viberUrl;
+  a.target = "_blank";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  // Optional: also copy the viber URL so agent can paste into browser if needed
+  navigator.clipboard?.writeText(viberUrl);
+
+  return;
+}
+
 
         window.open("https://business.facebook.com/latest/inbox", "_blank", "noopener");
       }
